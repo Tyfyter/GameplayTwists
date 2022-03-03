@@ -1,0 +1,6 @@
+displayName = Gameplay Twists
+author = Tyfyter2002
+version = 0.1
+homepage = https://tyfyter.github.io/
+dllReferences = Mono.CSharp
+buildIgnore = .vs\*, .git\*, ignore\*, .gitignore, .gitattributes, *.MD, *.csproj, *.user, obj\*, bin\*
