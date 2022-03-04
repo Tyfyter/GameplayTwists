@@ -23,8 +23,8 @@ namespace GameplayTwists {
 	public class GameplayTwists : Mod {
         public static GameplayTwists Instance { get; private set; }
 		public CompiledMethod[] ItemDisableConditions => itemDisableConditions;
-		public CompiledMethod[] AccessoryDisableConditions => accessoryDisableConditions;
-		internal CompiledMethod[] itemDisableConditions, accessoryDisableConditions;
+		public CompiledMethod[] EquipDisableConditions => equipDisableConditions;
+		internal CompiledMethod[] itemDisableConditions, equipDisableConditions;
         public static Evaluator Evaluator { get; private set; }
         public override void Load() {
             if(Instance!=null) Logger.Info("GameplayTwists Instance already loaded at Load()");
@@ -55,8 +55,42 @@ namespace GameplayTwists {
 				Logger.Error("error while importing: "+e);
 			}
             this.AddConfig(typeof(TwistConfig).Name, new TwistConfig());
-			//RefreshItemRestrictions();
+			On.Terraria.UI.ItemSlot.PickItemMovementAction += ItemSlot_PickItemMovementAction;
+			On.Terraria.UI.ItemSlot.SwapEquip_ItemArray_int_int += ItemSlot_SwapEquip_ItemArray_int_int;
 		}
+
+		private void ItemSlot_SwapEquip_ItemArray_int_int(On.Terraria.UI.ItemSlot.orig_SwapEquip_ItemArray_int_int orig, Item[] inv, int context, int slot) {
+			TwistEnvironment.item = inv[slot];
+			TwistEnvironment.player = Main.LocalPlayer;
+			if (GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns()) {
+				return;
+			}
+			orig(inv, context, slot);
+		}
+
+		private int ItemSlot_PickItemMovementAction(On.Terraria.UI.ItemSlot.orig_PickItemMovementAction orig, Item[] inv, int context, int slot, Item checkItem) {
+			switch (context) {
+				case ItemSlot.Context.EquipArmor:
+				case ItemSlot.Context.EquipArmorVanity:
+				case ItemSlot.Context.EquipAccessory:
+				case ItemSlot.Context.EquipAccessoryVanity:
+				case ItemSlot.Context.EquipDye:
+				case ItemSlot.Context.EquipLight:
+				case ItemSlot.Context.EquipMinecart:
+				case ItemSlot.Context.EquipMount:
+				case ItemSlot.Context.EquipPet:
+				case ItemSlot.Context.EquipGrapple: {
+					TwistEnvironment.item = checkItem;
+					TwistEnvironment.player = Main.LocalPlayer;
+					if (GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns()) {
+						return -1;
+					}
+				}
+				break;
+			}
+			return orig(inv, context, slot, checkItem);
+		}
+
 		internal void RefreshItemRestrictions(List<string> values, out CompiledMethod[] output) {
 			output = null;
 			if (!(values is null || Evaluator is null)) {
@@ -90,12 +124,12 @@ namespace GameplayTwists {
         public List<string> itemUseDisableConditions;
         
 		[UI.CustomModConfigItemList(typeof(UI.LargeStringInputElement))]
-        [Header("Accessory Disable Conditions")]
-        public List<string> accessoryDisableConditions;
+        [Header("Equipment Disable Conditions")]
+        public List<string> equipDisableConditions;
 
 		public override void OnChanged() {
 			GameplayTwists.Instance.RefreshItemRestrictions(itemUseDisableConditions, out GameplayTwists.Instance.itemDisableConditions);
-			GameplayTwists.Instance.RefreshItemRestrictions(accessoryDisableConditions, out GameplayTwists.Instance.accessoryDisableConditions);
+			GameplayTwists.Instance.RefreshItemRestrictions(equipDisableConditions, out GameplayTwists.Instance.equipDisableConditions);
 		}
 	}
 	public class TwistGlobalItem : GlobalItem {
@@ -107,7 +141,7 @@ namespace GameplayTwists {
 		public override bool CanEquipAccessory(Item item, Player player, int slot) {
 			TwistEnvironment.item = item;
 			TwistEnvironment.player = player;
-			return !GameplayTwists.Instance.AccessoryDisableConditions.CombineBoolReturns();
+			return !GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns();
 		}
 		public override void ModifyTooltips(Item item, List<TooltipLine> tooltips) {
 			TwistEnvironment.item = item;
@@ -116,7 +150,7 @@ namespace GameplayTwists {
 				disabled = disabled || GameplayTwists.Instance.ItemDisableConditions.CombineBoolReturns();
 			}
 			if (item.accessory) {
-				disabled = disabled || GameplayTwists.Instance.AccessoryDisableConditions.CombineBoolReturns();
+				disabled = disabled || GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns();
 			}
 			if (disabled) {
 				tooltips.Add(new TooltipLine(mod, "conditional", "[c/ff0000:Restricted]"));
