@@ -18,7 +18,7 @@ using Terraria.UI;
 
 namespace GameplayTwists.UI {
 	public static class PatchworkUI {
-		static Type UIModConfig => typeof(ConfigElement).Assembly.GetType("Terraria.ModLoader.Config.UI.UIModConfig");
+		internal static Type UIModConfig => typeof(ConfigElement).Assembly.GetType("Terraria.ModLoader.Config.UI.UIModConfig");
 		internal static void DoHook() {
             HookEndpointManager.Add(UIModConfig.GetMethod("WrapIt", BindingFlags.Public|BindingFlags.Static), (hook_WrapIt)Impl_WrapIt);
 		}
@@ -84,17 +84,33 @@ namespace GameplayTwists.UI {
 			uIInputTextField.SetText(Value);
 			uIInputTextField.Top.Set(5f, 0f);
 			uIInputTextField.Left.Set(10f, 0f);
-			uIInputTextField.Width.Set(-20f, 1f);
+			uIInputTextField.Width.Set(-52f, 1f);
 			uIInputTextField.Height.Set(-10f, 1f);
+			UIModConfigHoverImage expandButton = new UIModConfigHoverImage(expandedTexture, "Collapse");
+			expandButton.Top.Set(4, 0f); // 10, -25: 4, -52
+			expandButton.Left.Set(-30, 1f);
+			bool expanded = true;
+			expandButton.OnClick += (a, b) => {
+				expanded = !expanded;
+				if (expanded) {
+					expandButton.HoverText = "Collapse";
+					expandButton.SetImage(expandedTexture);
+				} else {
+					expandButton.HoverText = "Expand";
+					expandButton.SetImage(collapsedTexture);
+				}
+				RecalculateHeight(expanded?null:(int?)1);
+			};
 			RecalculateHeight();
 			uIInputTextField.OnTextChange += delegate {
 				Value = uIInputTextField.CurrentString;
 				RecalculateHeight();
 			};
 			uIPanel.Append(uIInputTextField);
+			uIPanel.Append(expandButton);
 		}
-		public void RecalculateHeight() {
-			int lineCount = Value.Split('\n').Length;
+		public void RecalculateHeight(int? lines = null) {
+			int lineCount = lines??Value.Split('\n').Length;
 			float oldHeight = this.Height.Pixels;
 			this.Height.Pixels = perLineHeight.Pixels * lineCount;
 			if (this.Height.Pixels != oldHeight && !(Parent is null)) {
@@ -197,6 +213,28 @@ namespace GameplayTwists.UI {
 			} else {
 				Utils.DrawBorderString(spriteBatch, text, new Vector2(dimensions.X, dimensions.Y), Color.White);
 			}
+		}
+	}
+	internal class UIModConfigHoverImage : UIImage {
+		internal string HoverText;
+
+		public UIModConfigHoverImage(Texture2D texture, string hoverText) : base(texture) {
+			HoverText = hoverText;
+		}
+
+		protected override void DrawSelf(SpriteBatch spriteBatch) {
+			base.DrawSelf(spriteBatch);
+			if (IsMouseHovering) {
+				PatchworkUI.UIModConfig.GetField("tooltip", BindingFlags.Public | BindingFlags.Static).SetValue(null, HoverText);
+			}
+		}
+	}
+	public class VariableSetElement : ConfigElement<VariableSet> {
+		public override void OnBind() {
+			base.OnBind();
+			drawLabel = false;
+			Width = new StyleDimension(0f, 1f);
+			Height = new StyleDimension(0f, 0f);
 		}
 	}
 	[AttributeUsage(AttributeTargets.Class | AttributeTargets.Enum | AttributeTargets.Property | AttributeTargets.Field)]

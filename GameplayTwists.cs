@@ -18,6 +18,7 @@ using Terraria.GameInput;
 using MonoMod.RuntimeDetour.HookGen;
 using System.Reflection;
 using Terraria.ID;
+using GameplayTwists.UI;
 
 namespace GameplayTwists {
 	public class GameplayTwists : Mod {
@@ -29,7 +30,7 @@ namespace GameplayTwists {
         public override void Load() {
             if(Instance!=null) Logger.Info("GameplayTwists Instance already loaded at Load()");
             Instance = this;
-			UI.PatchworkUI.DoHook();
+			PatchworkUI.DoHook();
             //Main.Achievements.OnAchievementCompleted += OnAchievementCompleted;
 			CompilerContext compilerContext = new CompilerContext(new CompilerSettings(), new ConsoleReportPrinter(new ILogTextWriter(Logger)));
 			Evaluator = new Evaluator(compilerContext);
@@ -119,24 +120,42 @@ namespace GameplayTwists {
 	[Label("Settings")]
     public class TwistConfig : ModConfig {
         public static TwistConfig Instance;
+        public override ConfigScope Mode => ConfigScope.ClientSide;
         public override bool Autoload(ref string name) {
             return false;
         }
-        public override ConfigScope Mode => ConfigScope.ClientSide;
 
         [Header("Item Disable Conditions")]
         
-		[UI.CustomModConfigItemList(typeof(UI.LargeStringInputElement))]
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
         [Label("Item Use Disable Conditions")]
         public List<string> itemUseDisableConditions;
         
-		[UI.CustomModConfigItemList(typeof(UI.LargeStringInputElement))]
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
         [Label("Equipment Disable Conditions")]
         public List<string> equipDisableConditions;
+
+		[Label("Variables")]
+		public TwistVars vars;
 
 		public override void OnChanged() {
 			GameplayTwists.Instance.RefreshItemRestrictions(itemUseDisableConditions, out GameplayTwists.Instance.itemDisableConditions);
 			GameplayTwists.Instance.RefreshItemRestrictions(equipDisableConditions, out GameplayTwists.Instance.equipDisableConditions);
+		}
+	}
+	public class TwistVars : ModConfig {
+		public override ConfigScope Mode => ConfigScope.ClientSide;
+        public override bool Autoload(ref string name) {
+            return false;
+        }
+		[CustomModConfigItem(typeof(VariableSetElement))]
+		public VariableSet variables {
+			get {
+				return TwistEnvironment.vars = TwistEnvironment.vars ?? new VariableSet();
+			}
+			set {
+				TwistEnvironment.vars = value ?? new VariableSet();
+			}
 		}
 	}
 	public class TwistGlobalItem : GlobalItem {
@@ -194,11 +213,15 @@ namespace GameplayTwists {
 				if (useOr) {
 					object value = false;
 					methods[i](ref value);
-					ret = ret || ((value as bool?)??false);
+					if (value is bool v) {
+						ret = ret || v;
+					}
 				} else {
 					object value = true;
 					methods[i](ref value);
-					ret = ret && ((value as bool?)??true);
+					if (value is bool v) {
+						ret = ret && v;
+					}
 				}
 			}
 			return ret;
