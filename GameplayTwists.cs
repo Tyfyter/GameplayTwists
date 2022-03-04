@@ -44,6 +44,9 @@ namespace GameplayTwists {
 						!assembly.FullName.Contains("System,") &&
 						!assembly.FullName.Contains("System")) {
 						Evaluator.ReferenceAssembly(assembly);
+						Logger.Info("Referenced assembly \""+assembly+'"');
+					} else {
+						Logger.Info("Ignored assembly \""+assembly+'"');
 					}
 				} catch (NullReferenceException) {}
 			}
@@ -120,13 +123,15 @@ namespace GameplayTwists {
             return false;
         }
         public override ConfigScope Mode => ConfigScope.ClientSide;
+
+        [Header("Item Disable Conditions")]
         
 		[UI.CustomModConfigItemList(typeof(UI.LargeStringInputElement))]
-        [Header("Item Use Disable Conditions")]
+        [Label("Item Use Disable Conditions")]
         public List<string> itemUseDisableConditions;
         
 		[UI.CustomModConfigItemList(typeof(UI.LargeStringInputElement))]
-        [Header("Equipment Disable Conditions")]
+        [Label("Equipment Disable Conditions")]
         public List<string> equipDisableConditions;
 
 		public override void OnChanged() {
@@ -173,7 +178,13 @@ namespace GameplayTwists {
 	public class VariableSet : Dictionary<string, object> {
 		public new object this[string key] {
 			get => ContainsKey(key)?base[key]:null;
-			set => base[key] = value;
+			set {
+				if (value is null) {
+					Remove(key);
+				} else {
+					base[key] = value;
+				}
+			}
 		}
 	}
 	public static class TwistExtensions {

@@ -1,1 +1,8 @@
-Gameplay Twists is a pretty cool mod, it does...this. Modify this file with a description of your mod.
+World Twists lets you automatically do some of those things youtubers done for videos, like restricting item/equipment use by arbitrary conditions such as not containing e in the name
+
+Usage:
+write code which returns true if the item should be disallowed (ex. item.Name.Contains("e"), !item.magic)
+available values are
+item: the item
+player: the player attempting to use/equip the item
+everything else that's available from a static context
