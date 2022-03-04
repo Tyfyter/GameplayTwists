@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoMod.RuntimeDetour.HookGen;
+using ReLogic.Graphics;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -234,7 +235,17 @@ namespace GameplayTwists.UI {
 			base.OnBind();
 			drawLabel = false;
 			Width = new StyleDimension(0f, 1f);
-			Height = new StyleDimension(0f, 0f);
+			Height = new StyleDimension(30f, 0f);
+		}
+		public override void Draw(SpriteBatch spriteBatch) {
+			base.Draw(spriteBatch);
+			Height = new StyleDimension(30f * Value.Count, 0f);
+			Vector2 position = this.GetInnerDimensions().ToRectangle().TopLeft();
+			float y = 4;
+			foreach (var item in Value) {
+				spriteBatch.DrawString(Main.fontMouseText, item.Key+": "+item.Value, position + new Vector2(8, y), Color.White);
+				y += 30f;
+			}
 		}
 	}
 	[AttributeUsage(AttributeTargets.Class | AttributeTargets.Enum | AttributeTargets.Property | AttributeTargets.Field)]

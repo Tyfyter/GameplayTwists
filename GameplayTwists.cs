@@ -25,7 +25,8 @@ namespace GameplayTwists {
         public static GameplayTwists Instance { get; private set; }
 		public CompiledMethod[] ItemDisableConditions => itemDisableConditions;
 		public CompiledMethod[] EquipDisableConditions => equipDisableConditions;
-		internal CompiledMethod[] itemDisableConditions, equipDisableConditions;
+		public CompiledMethod[] EventDamageTaken => eventDamageTaken;
+		internal CompiledMethod[] itemDisableConditions, equipDisableConditions, eventDamageTaken;
         public static Evaluator Evaluator { get; private set; }
         public override void Load() {
             if(Instance!=null) Logger.Info("GameplayTwists Instance already loaded at Load()");
@@ -135,12 +136,19 @@ namespace GameplayTwists {
         [Label("Equipment Disable Conditions")]
         public List<string> equipDisableConditions;
 
+        [Header("Events")]
+
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
+        [Label("Damage Taken")]
+        public List<string> eventDamageTaken;
+
 		[Label("Variables")]
 		public TwistVars vars;
 
 		public override void OnChanged() {
 			GameplayTwists.Instance.RefreshItemRestrictions(itemUseDisableConditions, out GameplayTwists.Instance.itemDisableConditions);
 			GameplayTwists.Instance.RefreshItemRestrictions(equipDisableConditions, out GameplayTwists.Instance.equipDisableConditions);
+			GameplayTwists.Instance.RefreshItemRestrictions(eventDamageTaken, out GameplayTwists.Instance.eventDamageTaken);
 		}
 	}
 	public class TwistVars : ModConfig {
@@ -156,6 +164,13 @@ namespace GameplayTwists {
 			set {
 				TwistEnvironment.vars = value ?? new VariableSet();
 			}
+		}
+	}
+	public class TwistPlayer : ModPlayer {
+		public override void Hurt(bool pvp, bool quiet, double damage, int hitDirection, bool crit) {
+			TwistEnvironment.player = player;
+			TwistEnvironment.damage = damage;
+			GameplayTwists.Instance.EventDamageTaken.ExecuteAll();
 		}
 	}
 	public class TwistGlobalItem : GlobalItem {
@@ -186,11 +201,12 @@ namespace GameplayTwists {
 	public static class TwistEnvironment {
 		public static Player player { get; internal set; }
 		public static Item item { get; internal set; }
+		public static double damage { get; internal set; }
 		public static VariableSet vars { get; internal set; }
 		public static string Process(string text) {
 			return Regex.Replace(
 					Regex.Replace(text, "vars\\[([^\"]+)\\]", "vars[\"$1\"]"),
-					"(vars|item|player)", "GameplayTwists.TwistEnvironment.$1"
+					"(vars|item|player|damage)", "GameplayTwists.TwistEnvironment.$1"
 				);
 		}
 	}
@@ -204,6 +220,9 @@ namespace GameplayTwists {
 					base[key] = value;
 				}
 			}
+		}
+		public T GetVar<T>(string key) {
+			return (T)(this[key]??default(T));
 		}
 	}
 	public static class TwistExtensions {
@@ -225,6 +244,14 @@ namespace GameplayTwists {
 				}
 			}
 			return ret;
+		}
+		public static void ExecuteAll(this CompiledMethod[] methods) {
+			object value = null;
+			for (int i = 0; i < methods.Length; i++) {
+				try {
+					methods[i](ref value);
+				} catch (Exception) { }
+			}
 		}
 	}
 	public class ILogTextWriter : TextWriter {
