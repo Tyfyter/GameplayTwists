@@ -23,10 +23,11 @@ using GameplayTwists.UI;
 namespace GameplayTwists {
 	public class GameplayTwists : Mod {
         public static GameplayTwists Instance { get; private set; }
-		public CompiledMethod[] ItemDisableConditions => itemDisableConditions;
-		public CompiledMethod[] EquipDisableConditions => equipDisableConditions;
-		public CompiledMethod[] EventDamageTaken => eventDamageTaken;
-		internal CompiledMethod[] itemDisableConditions, equipDisableConditions, eventDamageTaken;
+		public static CompiledMethod[] ItemDisableConditions => Instance.itemDisableConditions;
+		public static CompiledMethod[] EquipDisableConditions => Instance.equipDisableConditions;
+		public static CompiledMethod[] EventDamageTaken => Instance.eventDamageTaken;
+		public static CompiledMethod[] EventNPCKilled => Instance.eventNPCKilled;
+		internal CompiledMethod[] itemDisableConditions, equipDisableConditions, eventDamageTaken, eventNPCKilled;
         public static Evaluator Evaluator { get; private set; }
         public override void Load() {
             if(Instance!=null) Logger.Info("GameplayTwists Instance already loaded at Load()");
@@ -55,6 +56,7 @@ namespace GameplayTwists {
 			try {
 				Evaluator.Run("using Terraria;");
 				Evaluator.Run("using Terraria.ID;");
+				Evaluator.Run("using Microsoft.Xna.Framework;");
 				Evaluator.Run("using GameplayTwists;");
 			} catch (Exception e) {
 				Logger.Error("error while importing: "+e);
@@ -67,7 +69,7 @@ namespace GameplayTwists {
 		private void ItemSlot_SwapEquip_ItemArray_int_int(On.Terraria.UI.ItemSlot.orig_SwapEquip_ItemArray_int_int orig, Item[] inv, int context, int slot) {
 			TwistEnvironment.item = inv[slot];
 			TwistEnvironment.player = Main.LocalPlayer;
-			if (GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns()) {
+			if (GameplayTwists.EquipDisableConditions.CombineBoolReturns()) {
 				return;
 			}
 			orig(inv, context, slot);
@@ -87,7 +89,7 @@ namespace GameplayTwists {
 				case ItemSlot.Context.EquipGrapple: {
 					TwistEnvironment.item = checkItem;
 					TwistEnvironment.player = Main.LocalPlayer;
-					if (GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns()) {
+					if (GameplayTwists.EquipDisableConditions.CombineBoolReturns()) {
 						return -1;
 					}
 				}
@@ -142,6 +144,10 @@ namespace GameplayTwists {
         [Label("Damage Taken")]
         public List<string> eventDamageTaken;
 
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
+        [Label("Killed Enemy")]
+        public List<string> eventNPCKilled;
+
 		[Label("Variables")]
 		public TwistVars vars;
 
@@ -149,6 +155,7 @@ namespace GameplayTwists {
 			GameplayTwists.Instance.RefreshItemRestrictions(itemUseDisableConditions, out GameplayTwists.Instance.itemDisableConditions);
 			GameplayTwists.Instance.RefreshItemRestrictions(equipDisableConditions, out GameplayTwists.Instance.equipDisableConditions);
 			GameplayTwists.Instance.RefreshItemRestrictions(eventDamageTaken, out GameplayTwists.Instance.eventDamageTaken);
+			GameplayTwists.Instance.RefreshItemRestrictions(eventNPCKilled, out GameplayTwists.Instance.eventNPCKilled);
 		}
 	}
 	public class TwistVars : ModConfig {
@@ -170,28 +177,39 @@ namespace GameplayTwists {
 		public override void Hurt(bool pvp, bool quiet, double damage, int hitDirection, bool crit) {
 			TwistEnvironment.player = player;
 			TwistEnvironment.damage = damage;
-			GameplayTwists.Instance.EventDamageTaken.ExecuteAll();
+			GameplayTwists.EventDamageTaken.ExecuteAll();
+		}
+		public override void OnHitNPC(Item item, NPC target, int damage, float knockback, bool crit) {
+			if (target.life <= 0) {
+				TwistEnvironment.item = item;
+				OnKillNPC(target);
+			}
+		}
+		public override void OnHitNPCWithProj(Projectile proj, NPC target, int damage, float knockback, bool crit) {
+			if (target.life <= 0) {
+				OnKillNPC(target);
+			}
+		}
+		void OnKillNPC(NPC target) {
+			TwistEnvironment.npc = target;
+			TwistEnvironment.player = player;
+			GameplayTwists.EventNPCKilled.ExecuteAll();
 		}
 	}
 	public class TwistGlobalItem : GlobalItem {
 		public override bool CanUseItem(Item item, Player player) {
 			TwistEnvironment.item = item;
 			TwistEnvironment.player = player;
-			return !GameplayTwists.Instance.ItemDisableConditions.CombineBoolReturns();
-		}
-		public override bool CanEquipAccessory(Item item, Player player, int slot) {
-			TwistEnvironment.item = item;
-			TwistEnvironment.player = player;
-			return !GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns();
+			return !GameplayTwists.ItemDisableConditions.CombineBoolReturns();
 		}
 		public override void ModifyTooltips(Item item, List<TooltipLine> tooltips) {
 			TwistEnvironment.item = item;
 			bool disabled = false;
 			if (item.useStyle != 0) {
-				disabled = disabled || GameplayTwists.Instance.ItemDisableConditions.CombineBoolReturns();
+				disabled = disabled || GameplayTwists.ItemDisableConditions.CombineBoolReturns();
 			}
 			if (item.accessory) {
-				disabled = disabled || GameplayTwists.Instance.EquipDisableConditions.CombineBoolReturns();
+				disabled = disabled || GameplayTwists.EquipDisableConditions.CombineBoolReturns();
 			}
 			if (disabled) {
 				tooltips.Add(new TooltipLine(mod, "conditional", "[c/ff0000:Restricted]"));
@@ -202,11 +220,12 @@ namespace GameplayTwists {
 		public static Player player { get; internal set; }
 		public static Item item { get; internal set; }
 		public static double damage { get; internal set; }
+		public static NPC npc { get; internal set; }
 		public static VariableSet vars { get; internal set; }
 		public static string Process(string text) {
 			return Regex.Replace(
 					Regex.Replace(text, "vars\\[([^\"]+)\\]", "vars[\"$1\"]"),
-					"(vars|item|player|damage)", "GameplayTwists.TwistEnvironment.$1"
+					"(?<!\\w|\\.)(vars|item|player|damage|npc)(?!\\w)", "GameplayTwists.TwistEnvironment.$1"
 				);
 		}
 	}
@@ -252,6 +271,25 @@ namespace GameplayTwists {
 					methods[i](ref value);
 				} catch (Exception) { }
 			}
+		}
+		public static string GetMultilineClipboard(this ReLogic.OS.Platform platform) {
+			string clipboard = (string)typeof(ReLogic.OS.Platform).GetMethod("GetClipboard", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(platform, new object[0]);
+			StringBuilder stringBuilder = new StringBuilder(clipboard.Length);
+			for (int i = 0; i < clipboard.Length; i++) {
+				switch (clipboard[i]) {
+					case '\n':
+					stringBuilder.Append(clipboard[i]);
+					break;
+					case '\u007f':
+					break;
+					default:
+					if (clipboard[i] >= ' ') {
+						stringBuilder.Append(clipboard[i]);
+					}
+					break;
+				}
+			}
+			return stringBuilder.ToString();
 		}
 	}
 	public class ILogTextWriter : TextWriter {

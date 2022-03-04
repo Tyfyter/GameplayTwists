@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MonoMod.RuntimeDetour.HookGen;
 using ReLogic.Graphics;
+using ReLogic.OS;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -180,7 +181,14 @@ namespace GameplayTwists.UI {
 			if (Focused) {
 				PlayerInput.WritingText = true;
 				Main.instance.HandleIME();
-				string inputText = Main.GetInputText(CurrentString);
+				string inputText = CurrentString;
+				if (JustPressed(Keys.V) && (Main.inputText.IsKeyDown(Keys.LeftControl) || Main.inputText.IsKeyDown(Keys.RightControl))) {
+					inputText += Platform.Current.GetMultilineClipboard();
+					Main.oldInputText = Main.inputText;
+					Main.inputText = Keyboard.GetState();
+				} else {
+					inputText = Main.GetInputText(CurrentString);
+				}
 				if (JustPressed(Keys.Enter)) {
 					inputText += '\n';
 					Main.drawingPlayerChat = false;
