@@ -96,11 +96,13 @@ namespace GameplayTwists {
 			if (!(values is null || Evaluator is null)) {
 				List<CompiledMethod> compiledRestrictions = new List<CompiledMethod>(values.Count);
 				for (int i = 0; i < values.Count; i++) {
-					CompiledMethod _output = Evaluator.Compile(TwistEnvironment.Process(values[i])); 
-					if (_output is null) {
-						Logger.Error("occurred while compiling "+values[i]);
-					}
-					compiledRestrictions.Add(_output);
+					try {
+						CompiledMethod _output = Evaluator.Compile(TwistEnvironment.Process(values[i]));
+						if (_output is null) {
+							Logger.Error("occurred while compiling " + values[i]);
+						}
+						compiledRestrictions.Add(_output);
+					} catch (Exception) { }
 				}
 				compiledRestrictions.RemoveAll(v => v is null);
 				output = compiledRestrictions.ToArray();
