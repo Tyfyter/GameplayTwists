@@ -132,8 +132,13 @@ namespace GameplayTwists.UI {
 
 		private int _textBlinkerCount;
 
-		private int _textBlinkerState;
+		private bool _textBlinkerState;
 
+		private float hScroll = 0f;
+		
+		private int leftScrollTime = 0;
+
+		private int rightScrollTime = 0;
 		public bool UnfocusOnTab { get; internal set; }
 
 		public event EventHandler OnTextChange;
@@ -207,19 +212,67 @@ namespace GameplayTwists.UI {
 					}
 					this.OnTab?.Invoke(this, new EventArgs());
 				}
+				if (leftScrollTime > 0) leftScrollTime--;
+				if (rightScrollTime > 0) rightScrollTime--;
+				if (Main.inputText.IsKeyDown(Keys.Left)) {
+					bool shouldScroll = leftScrollTime <= 0;
+					int setScroll = 4;
+					if (!Main.oldInputText.IsKeyDown(Keys.Left)) {
+						shouldScroll = true;
+						setScroll = 15;
+					}
+					if (shouldScroll) {
+						hScroll -= 10;
+						if (hScroll < 0) {
+							hScroll = 0;
+						}
+						leftScrollTime = setScroll;
+					}
+				}
+				if (Main.inputText.IsKeyDown(Keys.Right)) {
+					bool shouldScroll = rightScrollTime <= 0;
+					int setScroll = 4;
+					if (!Main.oldInputText.IsKeyDown(Keys.Right)) {
+						shouldScroll = true;
+						setScroll = 15;
+					}
+					if (shouldScroll) {
+						hScroll += 10;
+						rightScrollTime = setScroll;
+					}
+				}
 				if (++_textBlinkerCount >= 20) {
-					_textBlinkerState = (_textBlinkerState + 1) % 2;
+					_textBlinkerState = !_textBlinkerState;
 					_textBlinkerCount = 0;
 				}
 			}
 			string text = CurrentString;
-			if (_textBlinkerState == 1 && Focused) {
+			if (_textBlinkerState && Focused) {
 				text += "|";
 			}
 			CalculatedStyle dimensions = GetDimensions();
 			if (CurrentString.Length == 0 && !Focused) {
 				Utils.DrawBorderString(spriteBatch, _hintText, new Vector2(dimensions.X, dimensions.Y), Color.Gray);
 			} else {
+				float maxDisplayWidth = this.GetOuterDimensions().Width;
+				if (Main.fontMouseText.MeasureString(text).X < maxDisplayWidth) {
+					hScroll = 0f;
+				} else {
+					StringBuilder displayedText = new StringBuilder();
+					float currentWidth = -hScroll;
+					for (int i = 0; i < text.Length; i++) {
+						if (text[i] == '\n') {
+							displayedText.Append('\n');
+							currentWidth = -hScroll;
+							continue;
+						}
+						currentWidth += Main.fontMouseText.MeasureString(text[i].ToString()).X;
+						if (currentWidth >= 0 && currentWidth <= maxDisplayWidth + 40) {
+							displayedText.Append(text[i]);
+						}
+					}
+					text = displayedText.ToString();
+				}
 				Utils.DrawBorderString(spriteBatch, text, new Vector2(dimensions.X, dimensions.Y), Color.White);
 			}
 		}

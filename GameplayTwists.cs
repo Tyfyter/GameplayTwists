@@ -19,6 +19,8 @@ using MonoMod.RuntimeDetour.HookGen;
 using System.Reflection;
 using Terraria.ID;
 using GameplayTwists.UI;
+using Newtonsoft.Json;
+using Terraria.ModLoader.IO;
 
 namespace GameplayTwists {
 	public class GameplayTwists : Mod {
@@ -62,14 +64,13 @@ namespace GameplayTwists {
 				Logger.Error("error while importing: "+e);
 			}
             this.AddConfig(typeof(TwistConfig).Name, new TwistConfig());
+            this.AddConfig(typeof(PerPlayerTwistConfig).Name, new PerPlayerTwistConfig());
 			On.Terraria.UI.ItemSlot.PickItemMovementAction += ItemSlot_PickItemMovementAction;
 			On.Terraria.UI.ItemSlot.SwapEquip_ItemArray_int_int += ItemSlot_SwapEquip_ItemArray_int_int;
 		}
 
 		private void ItemSlot_SwapEquip_ItemArray_int_int(On.Terraria.UI.ItemSlot.orig_SwapEquip_ItemArray_int_int orig, Item[] inv, int context, int slot) {
-			TwistEnvironment.item = inv[slot];
-			TwistEnvironment.player = Main.LocalPlayer;
-			if (GameplayTwists.EquipDisableConditions.CombineBoolReturns()) {
+			if (IsEquipDisabled(inv[slot])) {
 				return;
 			}
 			orig(inv, context, slot);
@@ -78,24 +79,31 @@ namespace GameplayTwists {
 		private int ItemSlot_PickItemMovementAction(On.Terraria.UI.ItemSlot.orig_PickItemMovementAction orig, Item[] inv, int context, int slot, Item checkItem) {
 			switch (context) {
 				case ItemSlot.Context.EquipArmor:
-				case ItemSlot.Context.EquipArmorVanity:
 				case ItemSlot.Context.EquipAccessory:
-				case ItemSlot.Context.EquipAccessoryVanity:
-				case ItemSlot.Context.EquipDye:
 				case ItemSlot.Context.EquipLight:
 				case ItemSlot.Context.EquipMinecart:
 				case ItemSlot.Context.EquipMount:
 				case ItemSlot.Context.EquipPet:
 				case ItemSlot.Context.EquipGrapple: {
-					TwistEnvironment.item = checkItem;
-					TwistEnvironment.player = Main.LocalPlayer;
-					if (GameplayTwists.EquipDisableConditions.CombineBoolReturns()) {
+					if (IsEquipDisabled(checkItem)) {
 						return -1;
 					}
 				}
 				break;
 			}
 			return orig(inv, context, slot, checkItem);
+		}
+		bool IsEquipDisabled(Item item) {
+			TwistEnvironment.item = item;
+			TwistEnvironment.player = Main.LocalPlayer;
+			if (GameplayTwists.EquipDisableConditions.CombineBoolReturns(isStatic:true)) {
+				return true;
+			}
+			TwistPlayer twistPlayer = Main.LocalPlayer.GetModPlayer<TwistPlayer>();
+			if (twistPlayer.equipDisableConditions.CombineBoolReturns(isStatic:false)) {
+				return true;
+			}
+			return false;
 		}
 
 		internal void RefreshItemRestrictions(List<string> values, out CompiledMethod[] output) {
@@ -158,6 +166,105 @@ namespace GameplayTwists {
 			GameplayTwists.Instance.RefreshItemRestrictions(eventNPCKilled, out GameplayTwists.Instance.eventNPCKilled);
 		}
 	}
+	[Label("Per-Player Settings")]
+    public class PerPlayerTwistConfig : ModConfig {
+        public static PerPlayerTwistConfig Instance;
+        public override ConfigScope Mode => ConfigScope.ClientSide;
+        public override bool Autoload(ref string name) {
+            return false;
+        }
+
+        [Header("Item Disable Conditions")]
+
+		[JsonIgnore]
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
+		[Label("Item Use Disable Conditions")]
+		public List<string> itemUseDisableConditions {
+			get {
+				if (Main.LocalPlayer?.active??false) {
+					return Main.LocalPlayer.GetModPlayer<TwistPlayer>().itemUseDisableSource;
+				}
+				return null;
+			}
+			set {
+				if (Main.LocalPlayer?.active??false) {
+					if (Main.LocalPlayer.GetModPlayer<TwistPlayer>() is TwistPlayer twistPlayer) {
+						twistPlayer.itemUseDisableSource = value;
+					}
+				}
+			}
+		}
+        
+		[JsonIgnore]
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
+        [Label("Equipment Disable Conditions")]
+        public List<string> equipDisableConditions {
+			get {
+				if (Main.LocalPlayer?.active??false) {
+					return Main.LocalPlayer.GetModPlayer<TwistPlayer>().equipDisableSource;
+				}
+				return null;
+			}
+			set {
+				if (Main.LocalPlayer?.active??false) {
+					if (Main.LocalPlayer.GetModPlayer<TwistPlayer>() is TwistPlayer twistPlayer) {
+						twistPlayer.equipDisableSource = value;
+					}
+				}
+			}
+		}
+
+        [Header("Events")]
+		
+		[JsonIgnore]
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
+        [Label("Damage Taken")]
+        public List<string> eventDamageTaken {
+			get {
+				if (Main.LocalPlayer?.active??false) {
+					return Main.LocalPlayer.GetModPlayer<TwistPlayer>().damageTakenSource;
+				}
+				return null;
+			}
+			set {
+				if (Main.LocalPlayer?.active??false) {
+					if (Main.LocalPlayer.GetModPlayer<TwistPlayer>() is TwistPlayer twistPlayer) {
+						twistPlayer.damageTakenSource = value;
+					}
+				}
+			}
+		}
+		
+		[JsonIgnore]
+		[CustomModConfigItemList(typeof(LargeStringInputElement))]
+        [Label("Killed Enemy")]
+        public List<string> eventNPCKilled {
+			get {
+				if (Main.LocalPlayer?.active??false) {
+					return Main.LocalPlayer.GetModPlayer<TwistPlayer>().NPCKilledSource;
+				}
+				return null;
+			}
+			set {
+				if (Main.LocalPlayer?.active??false) {
+					if (Main.LocalPlayer.GetModPlayer<TwistPlayer>() is TwistPlayer twistPlayer) {
+						twistPlayer.NPCKilledSource = value;
+					}
+				}
+			}
+		}
+
+		public override void OnChanged() {
+			if (Main.LocalPlayer?.active??false) {
+				if (Main.LocalPlayer.GetModPlayer<TwistPlayer>() is TwistPlayer twistPlayer) {
+					GameplayTwists.Instance.RefreshItemRestrictions(itemUseDisableConditions, out twistPlayer.itemDisableConditions);
+					GameplayTwists.Instance.RefreshItemRestrictions(equipDisableConditions, out twistPlayer.equipDisableConditions);
+					GameplayTwists.Instance.RefreshItemRestrictions(eventDamageTaken, out twistPlayer.eventDamageTaken);
+					GameplayTwists.Instance.RefreshItemRestrictions(eventNPCKilled, out twistPlayer.eventNPCKilled);
+				}
+			}
+		}
+	}
 	public class TwistVars : ModConfig {
 		public override ConfigScope Mode => ConfigScope.ClientSide;
         public override bool Autoload(ref string name) {
@@ -174,10 +281,22 @@ namespace GameplayTwists {
 		}
 	}
 	public class TwistPlayer : ModPlayer {
+		internal List<string> itemUseDisableSource, equipDisableSource, damageTakenSource, NPCKilledSource;
+		internal CompiledMethod[] itemDisableConditions = new CompiledMethod[0], equipDisableConditions = new CompiledMethod[0], eventDamageTaken = new CompiledMethod[0], eventNPCKilled = new CompiledMethod[0];
+		private VariableSet vars;
+		public VariableSet variables {
+			get {
+				return vars = vars ?? new VariableSet();
+			}
+			set {
+				vars = value ?? new VariableSet();
+			}
+		}
 		public override void Hurt(bool pvp, bool quiet, double damage, int hitDirection, bool crit) {
 			TwistEnvironment.player = player;
 			TwistEnvironment.damage = damage;
-			GameplayTwists.EventDamageTaken.ExecuteAll();
+			GameplayTwists.EventDamageTaken.ExecuteAll(isStatic:true);
+			eventDamageTaken.ExecuteAll(isStatic:false);
 		}
 		public override void OnHitNPC(Item item, NPC target, int damage, float knockback, bool crit) {
 			if (target.life <= 0) {
@@ -193,23 +312,48 @@ namespace GameplayTwists {
 		void OnKillNPC(NPC target) {
 			TwistEnvironment.npc = target;
 			TwistEnvironment.player = player;
-			GameplayTwists.EventNPCKilled.ExecuteAll();
+			GameplayTwists.EventNPCKilled.ExecuteAll(isStatic:true);
+			eventNPCKilled.ExecuteAll(isStatic:false);
+		}
+		public override TagCompound Save() {
+			return new TagCompound {
+				{ "itemUseDisableSource", itemUseDisableSource },
+				{ "equipDisableSource", equipDisableSource },
+				{ "damageTakenSource", damageTakenSource },
+				{ "NPCKilledSource", NPCKilledSource }
+			};
+		}
+		public override void Load(TagCompound tag) {
+			itemUseDisableSource = tag.ContainsKey("itemUseDisableSource") ? (List<string>)tag.GetList<string>("itemUseDisableSource") : new List<string>();
+			equipDisableSource = tag.ContainsKey("equipDisableSource") ? (List<string>)tag.GetList<string>("equipDisableSource") : new List<string>();
+			damageTakenSource = tag.ContainsKey("damageTakenSource") ? (List<string>)tag.GetList<string>("damageTakenSource") : new List<string>();
+			NPCKilledSource = tag.ContainsKey("NPCKilledSource") ? (List<string>)tag.GetList<string>("NPCKilledSource") : new List<string>();
+		}
+		public override void OnEnterWorld(Player player) {
+			PerPlayerTwistConfig.Instance.OnChanged();
 		}
 	}
 	public class TwistGlobalItem : GlobalItem {
 		public override bool CanUseItem(Item item, Player player) {
 			TwistEnvironment.item = item;
 			TwistEnvironment.player = player;
-			return !GameplayTwists.ItemDisableConditions.CombineBoolReturns();
+			if (GameplayTwists.ItemDisableConditions.CombineBoolReturns(isStatic:true)) {
+				return false;
+			}
+			return !Main.LocalPlayer.GetModPlayer<TwistPlayer>().itemDisableConditions.CombineBoolReturns(isStatic:false);
 		}
 		public override void ModifyTooltips(Item item, List<TooltipLine> tooltips) {
 			TwistEnvironment.item = item;
 			bool disabled = false;
 			if (item.useStyle != 0) {
-				disabled = disabled || GameplayTwists.ItemDisableConditions.CombineBoolReturns();
+				disabled = disabled ||
+					GameplayTwists.ItemDisableConditions.CombineBoolReturns(isStatic:true)||
+					Main.LocalPlayer.GetModPlayer<TwistPlayer>().itemDisableConditions.CombineBoolReturns(isStatic:false);
 			}
-			if (item.accessory) {
-				disabled = disabled || GameplayTwists.EquipDisableConditions.CombineBoolReturns();
+			if (item.accessory || item.headSlot != -1 || item.bodySlot != -1 || item.legSlot != -1) {
+				disabled = disabled ||
+					GameplayTwists.EquipDisableConditions.CombineBoolReturns(isStatic:true)||
+					Main.LocalPlayer.GetModPlayer<TwistPlayer>().equipDisableConditions.CombineBoolReturns(isStatic:false);
 			}
 			if (disabled) {
 				tooltips.Add(new TooltipLine(mod, "conditional", "[c/ff0000:Restricted]"));
@@ -221,11 +365,27 @@ namespace GameplayTwists {
 		public static Item item { get; internal set; }
 		public static double damage { get; internal set; }
 		public static NPC npc { get; internal set; }
-		public static VariableSet vars { get; internal set; }
+		public static VariableSet staticVars { get; internal set; }
+		public static bool IsStatic { get; internal set; } = true;
+		public static VariableSet vars {
+			get {
+				if (IsStatic) return staticVars;
+				if (Main.LocalPlayer?.active??false) {
+					return Main.LocalPlayer.GetModPlayer<TwistPlayer>().variables;
+				}
+				return null;
+			}
+			internal set {
+				if (IsStatic) staticVars = value;
+				if (Main.LocalPlayer?.active??false) {
+					Main.LocalPlayer.GetModPlayer<TwistPlayer>().variables = value;
+				}
+			}
+		}
 		public static string Process(string text) {
 			return Regex.Replace(
 					Regex.Replace(text, "vars\\[([^\"]+)\\]", "vars[\"$1\"]"),
-					"(?<!\\w|\\.)(vars|item|player|damage|npc)(?!\\w)", "GameplayTwists.TwistEnvironment.$1"
+					"(?<!\\w|\\.)(vars|item|player|damage|npc)(?!\\w)", "TwistEnvironment.$1"
 				);
 		}
 	}
@@ -245,7 +405,8 @@ namespace GameplayTwists {
 		}
 	}
 	public static class TwistExtensions {
-		public static bool CombineBoolReturns(this CompiledMethod[] methods, bool useOr = true) {
+		public static bool CombineBoolReturns(this CompiledMethod[] methods, bool useOr = true, bool isStatic = true) {
+			TwistEnvironment.IsStatic = isStatic;
 			bool ret = !useOr;
 			for (int i = 0; i < methods.Length; i++) {
 				if (useOr) {
@@ -264,7 +425,8 @@ namespace GameplayTwists {
 			}
 			return ret;
 		}
-		public static void ExecuteAll(this CompiledMethod[] methods) {
+		public static void ExecuteAll(this CompiledMethod[] methods, bool isStatic = true) {
+			TwistEnvironment.IsStatic = isStatic;
 			object value = null;
 			for (int i = 0; i < methods.Length; i++) {
 				try {
