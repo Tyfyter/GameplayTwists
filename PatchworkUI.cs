@@ -12,6 +12,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Terraria;
+using Terraria.GameContent;
 using Terraria.GameContent.UI.Elements;
 using Terraria.GameInput;
 using Terraria.ModLoader.Config;
@@ -255,7 +256,7 @@ namespace GameplayTwists.UI {
 				Utils.DrawBorderString(spriteBatch, _hintText, new Vector2(dimensions.X, dimensions.Y), Color.Gray);
 			} else {
 				float maxDisplayWidth = this.GetOuterDimensions().Width;
-				if (Main.fontMouseText.MeasureString(text).X < maxDisplayWidth) {
+				if (FontAssets.MouseText.Value.MeasureString(text).X < maxDisplayWidth) {
 					hScroll = 0f;
 				} else {
 					StringBuilder displayedText = new StringBuilder();
@@ -266,7 +267,7 @@ namespace GameplayTwists.UI {
 							currentWidth = -hScroll;
 							continue;
 						}
-						currentWidth += Main.fontMouseText.MeasureString(text[i].ToString()).X;
+						currentWidth += FontAssets.MouseText.Value.MeasureString(text[i].ToString()).X;
 						if (currentWidth >= 0 && currentWidth <= maxDisplayWidth + 40) {
 							displayedText.Append(text[i]);
 						}
@@ -304,7 +305,7 @@ namespace GameplayTwists.UI {
 			Vector2 position = this.GetInnerDimensions().ToRectangle().TopLeft();
 			float y = 4;
 			foreach (var item in Value) {
-				spriteBatch.DrawString(Main.fontMouseText, item.Key+": "+item.Value, position + new Vector2(8, y), Color.White);
+				spriteBatch.DrawString(FontAssets.MouseText.Value, item.Key+": "+item.Value, position + new Vector2(8, y), Color.White);
 				y += 30f;
 			}
 		}

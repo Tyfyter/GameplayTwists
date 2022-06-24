@@ -21,6 +21,7 @@ using Terraria.ID;
 using GameplayTwists.UI;
 using Newtonsoft.Json;
 using Terraria.ModLoader.IO;
+using System.Linq;
 
 namespace GameplayTwists {
 	public class GameplayTwists : Mod {
@@ -67,6 +68,11 @@ namespace GameplayTwists {
             this.AddConfig(typeof(PerPlayerTwistConfig).Name, new PerPlayerTwistConfig());
 			On.Terraria.UI.ItemSlot.PickItemMovementAction += ItemSlot_PickItemMovementAction;
 			On.Terraria.UI.ItemSlot.SwapEquip_ItemArray_int_int += ItemSlot_SwapEquip_ItemArray_int_int;
+			On.Terraria.Collision.DrownCollision += Collision_DrownCollision;
+		}
+		internal static bool forceDrown = false;
+		private bool Collision_DrownCollision(On.Terraria.Collision.orig_DrownCollision orig, Vector2 Position, int Width, int Height, float gravDir, bool includeSlopes) {
+			return forceDrown || orig(Position, Width, Height, gravDir, includeSlopes);
 		}
 
 		private void ItemSlot_SwapEquip_ItemArray_int_int(On.Terraria.UI.ItemSlot.orig_SwapEquip_ItemArray_int_int orig, Item[] inv, int context, int slot) {
@@ -293,7 +299,7 @@ namespace GameplayTwists {
 			}
 		}
 		public override void Hurt(bool pvp, bool quiet, double damage, int hitDirection, bool crit) {
-			TwistEnvironment.player = player;
+			TwistEnvironment.player = Player;
 			TwistEnvironment.damage = damage;
 			GameplayTwists.EventDamageTaken.ExecuteAll(isStatic:true);
 			eventDamageTaken.ExecuteAll(isStatic:false);
@@ -309,21 +315,28 @@ namespace GameplayTwists {
 				OnKillNPC(target);
 			}
 		}
+		public override void ResetEffects() {
+			/*if (TwistConfig.Instance.KeepAnvil && TwistWorld.pairings is not null) {
+				bool[] oldAdjTile = Player.adjTile.ToArray();
+				KeyValuePair<ushort, ushort>[] pairings = TwistWorld.pairings.ToArray();
+				for (int i = 0; i < pairings.Length; i++) {
+					Player.adjTile[pairings[i].Key] = oldAdjTile[pairings[i].Value];
+				}
+			}*/
+		}
 		void OnKillNPC(NPC target) {
 			TwistEnvironment.npc = target;
-			TwistEnvironment.player = player;
+			TwistEnvironment.player = Player;
 			GameplayTwists.EventNPCKilled.ExecuteAll(isStatic:true);
 			eventNPCKilled.ExecuteAll(isStatic:false);
 		}
-		public override TagCompound Save() {
-			return new TagCompound {
-				{ "itemUseDisableSource", itemUseDisableSource },
-				{ "equipDisableSource", equipDisableSource },
-				{ "damageTakenSource", damageTakenSource },
-				{ "NPCKilledSource", NPCKilledSource }
-			};
+		public override void SaveData(TagCompound tag){
+			tag.Add("itemUseDisableSource", itemUseDisableSource);
+			tag.Add("equipDisableSource", equipDisableSource);
+			tag.Add("damageTakenSource", damageTakenSource);
+			tag.Add("NPCKilledSource", NPCKilledSource);
 		}
-		public override void Load(TagCompound tag) {
+		public override void LoadData(TagCompound tag) {
 			itemUseDisableSource = tag.ContainsKey("itemUseDisableSource") ? (List<string>)tag.GetList<string>("itemUseDisableSource") : new List<string>();
 			equipDisableSource = tag.ContainsKey("equipDisableSource") ? (List<string>)tag.GetList<string>("equipDisableSource") : new List<string>();
 			damageTakenSource = tag.ContainsKey("damageTakenSource") ? (List<string>)tag.GetList<string>("damageTakenSource") : new List<string>();
@@ -350,13 +363,13 @@ namespace GameplayTwists {
 					GameplayTwists.ItemDisableConditions.CombineBoolReturns(isStatic:true)||
 					Main.LocalPlayer.GetModPlayer<TwistPlayer>().itemDisableConditions.CombineBoolReturns(isStatic:false);
 			}
-			if (item.accessory || item.headSlot != -1 || item.bodySlot != -1 || item.legSlot != -1) {
+			if (item.accessory || item.headSlot != -1 || item.bodySlot != -1 || item.legSlot != -1 || item.mountType != -1) {
 				disabled = disabled ||
 					GameplayTwists.EquipDisableConditions.CombineBoolReturns(isStatic:true)||
 					Main.LocalPlayer.GetModPlayer<TwistPlayer>().equipDisableConditions.CombineBoolReturns(isStatic:false);
 			}
 			if (disabled) {
-				tooltips.Add(new TooltipLine(mod, "conditional", "[c/ff0000:Restricted]"));
+				tooltips.Add(new TooltipLine(Mod, "conditional", "[c/ff0000:Restricted]"));
 			}
 		}
 	}
