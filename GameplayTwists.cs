@@ -22,6 +22,7 @@ using GameplayTwists.UI;
 using Newtonsoft.Json;
 using Terraria.ModLoader.IO;
 using System.Linq;
+using System.Collections;
 
 namespace GameplayTwists {
 	public class GameplayTwists : Mod {
@@ -165,11 +166,18 @@ namespace GameplayTwists {
 		[Label("Variables")]
 		public TwistVars vars;
 
+		[Label("Crafting Station Map")]
+		[Tooltip("Formatted as input->output, example:48,Obsidian->Anvil would make spikes and obsidian function as anvils (but not anvils)")]
+		public List<string> TileMapsStr { get; set; } = new List<string> { };
+		internal TypeMap[] StationMaps = new TypeMap[0];
+		public int TileParser(string value) => int.TryParse(value, out int v) ? v : TileID.Search.GetId(value);
+
 		public override void OnChanged() {
 			GameplayTwists.Instance.RefreshItemRestrictions(itemUseDisableConditions, out GameplayTwists.Instance.itemDisableConditions);
 			GameplayTwists.Instance.RefreshItemRestrictions(equipDisableConditions, out GameplayTwists.Instance.equipDisableConditions);
 			GameplayTwists.Instance.RefreshItemRestrictions(eventDamageTaken, out GameplayTwists.Instance.eventDamageTaken);
 			GameplayTwists.Instance.RefreshItemRestrictions(eventNPCKilled, out GameplayTwists.Instance.eventNPCKilled);
+			StationMaps = TileMapsStr.Select((m) => TypeMap.FromString(m, TileParser)).ToArray();
 		}
 	}
 	[Label("Per-Player Settings")]
@@ -279,7 +287,7 @@ namespace GameplayTwists {
 		[CustomModConfigItem(typeof(VariableSetElement))]
 		public VariableSet variables {
 			get {
-				return TwistEnvironment.vars = TwistEnvironment.vars ?? new VariableSet();
+				return TwistEnvironment.vars ??= new VariableSet();
 			}
 			set {
 				TwistEnvironment.vars = value ?? new VariableSet();
@@ -316,13 +324,11 @@ namespace GameplayTwists {
 			}
 		}
 		public override void ResetEffects() {
-			/*if (TwistConfig.Instance.KeepAnvil && TwistWorld.pairings is not null) {
-				bool[] oldAdjTile = Player.adjTile.ToArray();
-				KeyValuePair<ushort, ushort>[] pairings = TwistWorld.pairings.ToArray();
-				for (int i = 0; i < pairings.Length; i++) {
-					Player.adjTile[pairings[i].Key] = oldAdjTile[pairings[i].Value];
-				}
-			}*/
+			bool[] oldAdjTile = Player.adjTile.ToArray();
+			TypeMap[] pairings = TwistConfig.Instance.StationMaps;
+			for (int i = 0; i < pairings.Length; i++) {
+				Player.adjTile[pairings[i].output] = pairings[i].input.Any((v) => oldAdjTile[v]);
+			}
 		}
 		void OnKillNPC(NPC target) {
 			TwistEnvironment.npc = target;
@@ -484,6 +490,34 @@ namespace GameplayTwists {
 			} else {
 				buffer += value;
 			}
+		}
+	}
+	public class TypeMap {
+		public int[] input;
+		public int output;
+		public TypeMap(ICollection<int> input, int output) : this(input.ToArray(), output) { }
+		public TypeMap(int[] input, int output) {
+			this.input = input;
+			this.output = output;
+		}
+		public override bool Equals(object obj) {
+			if (obj is TypeMap other)
+				return output == other.output && input.ToArray().deepCompare(other.input.ToArray());
+			return base.Equals(obj);
+		}
+		public override int GetHashCode() {
+			return new { input = ((IStructuralEquatable)this.input).GetHashCode(EqualityComparer<int>.Default), output }.GetHashCode();
+		}
+		public static TypeMap FromString(string value) {
+			string[] sections = value.Split(new string[] { "->" }, StringSplitOptions.RemoveEmptyEntries);
+			return new TypeMap(sections[0].Split(',').Select(int.Parse).ToArray(), int.Parse(sections[1]));
+		}
+		public static TypeMap FromString(string value, Func<string, int> parser) {
+			string[] sections = value.Split(new string[] { "->" }, StringSplitOptions.RemoveEmptyEntries);
+			return new TypeMap(sections[0].Split(',').Select(parser).ToArray(), parser(sections[1]));
+		}
+		public override string ToString() {
+			return $" {string.Join(",", input)}-> {output}";
 		}
 	}
 }

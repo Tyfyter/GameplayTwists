@@ -75,7 +75,7 @@ namespace GameplayTwists.UI {
 		public override void OnBind() {
 			base.OnBind();
 			perLineHeight = Height;
-			drawLabel = false;
+			DrawLabel = false;
 			UIPanel uIPanel = new UIPanel();
 			uIPanel.SetPadding(0f);
 			UIFocusInputTextField uIInputTextField = new UIFocusInputTextField("Type here");
@@ -89,7 +89,7 @@ namespace GameplayTwists.UI {
 			uIInputTextField.Left.Set(10f, 0f);
 			uIInputTextField.Width.Set(-52f, 1f);
 			uIInputTextField.Height.Set(-10f, 1f);
-			UIModConfigHoverImage expandButton = new UIModConfigHoverImage(expandedTexture, "Collapse");
+			UIModConfigHoverImage expandButton = new UIModConfigHoverImage(ExpandedTexture.Value, "Collapse");
 			expandButton.Top.Set(4, 0f); // 10, -25: 4, -52
 			expandButton.Left.Set(-30, 1f);
 			bool expanded = true;
@@ -97,10 +97,10 @@ namespace GameplayTwists.UI {
 				expanded = !expanded;
 				if (expanded) {
 					expandButton.HoverText = "Collapse";
-					expandButton.SetImage(expandedTexture);
+					expandButton.SetImage(ExpandedTexture.Value);
 				} else {
 					expandButton.HoverText = "Expand";
-					expandButton.SetImage(collapsedTexture);
+					expandButton.SetImage(CollapsedTexture.Value);
 				}
 				RecalculateHeight(expanded?null:(int?)1);
 			};
@@ -295,7 +295,7 @@ namespace GameplayTwists.UI {
 	public class VariableSetElement : ConfigElement<VariableSet> {
 		public override void OnBind() {
 			base.OnBind();
-			drawLabel = false;
+			DrawLabel = false;
 			Width = new StyleDimension(0f, 1f);
 			Height = new StyleDimension(30f, 0f);
 		}
